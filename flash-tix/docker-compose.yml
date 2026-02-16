@@ -1,22 +1,45 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: flashuser
+      POSTGRES_PASSWORD: flashpass
+      POSTGRES_DB: flashtix
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U flashuser -d flashtix" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   inventory-service:
     build: ./inventory-service
     ports:
       - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://flashuser:flashpass@postgres:5432/flashtix
+  # order-service:
+  #   build: ./order-service
+  #   ports:
+  #     - "8002:8000"
 
-  order-service:
-    build: ./order-service
-    ports:
-      - "8002:8000"
+  # payment-service:
+  #   build: ./payment-service
+  #   ports:
+  #     - "8003:8000"
 
-  payment-service:
-    build: ./payment-service
-    ports:
-      - "8003:8000"
+  # notification-service:
+  #   build: ./notification-service
+  #   ports:
+  #     - "8004:8000"
 
-  notification-service:
-    build: ./notification-service
-    ports:
-      - "8004:8000"
+volumes:
+  pgdata:
