@@ -37,22 +37,34 @@ def create_order(request: CreateOrderRequest):
 
         if response.status_code != 200:
             raise HTTPException(status_code=400, detail="Inventory reservation failed")
+        
+        
+        try:
+            # create order
+            order=Order(
+                event_id=request.event_id,
+                quantity=request.quantity,
+                status="CREATED"
+            )
 
-        # Create order
-        order = Order(
-            event_id=request.event_id,
-            quantity=request.quantity,
-            status="CREATED"
-        )
+            db.add(order)
+            db.commit()
+            db.refresh(order)
 
-        db.add(order)
-        db.commit()
-        db.refresh(order)
-
-        return {
-            "order_id": order.id,
-            "status": order.status
-        }
-
+            return{
+                "order_id":order.id,
+                "status":order.status
+            }
+        except Exception as e:
+            # Compensation
+            requests.post(
+                "http://inventory-service:8000/inventory/release",
+                json={
+                    "event_id": request.event_id,
+                    "quantity": request.quantity
+                }
+            )
+            raise
+        
     finally:
         db.close()
