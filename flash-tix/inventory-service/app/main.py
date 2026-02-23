@@ -20,16 +20,17 @@ def startup():
     db=SessionLocal()
     existing_event=db.query(Event).first()
     if not existing_event:
-        event=Event(
+        existing_event=Event(
             name="Rock Concert",
             total_tickets=100,
             available_tickets=100
         )
-        db.add(event)
+        db.add(existing_event)
         db.commit()
+        db.refresh(existing_event)
 
-    event=db.query(Event).first()
-    redis_client.set(f"event:{event.id}:stock",event.available_tickets)
+    # Always sync Redis from Postgres on every startup
+    redis_client.set(f"event:{existing_event.id}:stock", existing_event.available_tickets)
 
     db.close()
 
@@ -41,35 +42,42 @@ def health_check():
 def reserve_ticket(request:ReserveRequest):
     stock_key=f"event:{request.event_id}:stock"
 
-    #Atomic decrement
-    remaining=redis_client.decr(stock_key)
+    # Step 1: Redis Atomic Decrement (respects quantity)
+    remaining=redis_client.decrby(stock_key, request.quantity)
 
     if remaining < 0:
         #Undo decrement
         redis_client.incr(stock_key)
-        raise HTTPException(status_code=400,detail="Not enough tickets")
+        raise HTTPException(status_code=400,detail="Sold Out")
 
-    #Update DB (No locking needed now)
+    # Step 2: Protect DB with Row-level Locking
     db=SessionLocal()
 
     try:
-        event=db.query(Event).filter(Event.id==request.event_id).first()
-        event.available_tickets-=request.quantity
+        event=(
+            db.query(Event)
+            .filter(Event.id == request.event_id)
+            .with_for_update()
+            .first()
+        )
+
+        if not event or event.available_tickets<=0:
+            # if DB says sold out, restore Redis
+            redis_client.incr(stock_key)
+            raise HTTPException(status_code=404,detail="Sold out (DB check)")
+        
+        event.available_tickets -= request.quantity
         db.commit()
 
-        # if not event:
-        #     raise HTTPException(status_code=404,detail="Event not found")
-        
-        # if event.available_tickets<request.quantity:
-        #     raise HTTPException(status_code=400,detail="Not enough tickets")
-        
-        # event.available_tickets -= request.quantity
-        # db.commit()
-
-        # return{
-        #     "status":"RESERVED",
-        #     "remaining_tickets":event.available_tickets
-        # }
+    except HTTPException:
+        # HTTPException already restored Redis above — just rollback & re-raise
+        db.rollback()
+        raise
+    except Exception:
+        # Unexpected DB error — restore Redis and rollback
+        db.rollback()
+        redis_client.incrby(stock_key, request.quantity)
+        raise
 
     finally:
         db.close()
