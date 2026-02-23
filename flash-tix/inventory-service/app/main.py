@@ -5,7 +5,7 @@ from app.models.event import Event
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from app.redis_client import redis_client
+from app.redis_client import redis_client, stock_decrement_script
 
 app=FastAPI()
 
@@ -42,13 +42,8 @@ def health_check():
 def reserve_ticket(request:ReserveRequest):
     stock_key=f"event:{request.event_id}:stock"
 
-    # Step 1: Redis Atomic Decrement (respects quantity)
-    remaining=redis_client.decrby(stock_key, request.quantity)
-
-    if remaining < 0:
-        #Undo decrement
-        redis_client.incr(stock_key)
-        raise HTTPException(status_code=400,detail="Sold Out")
+    # Step 1: Redis Atomic Decrement via Lua (respects quantity, no race condition)
+    remaining=stock_decrement_script(keys=[stock_key], args=[request.quantity])
 
     # Step 2: Protect DB with Row-level Locking
     db=SessionLocal()
@@ -61,10 +56,10 @@ def reserve_ticket(request:ReserveRequest):
             .first()
         )
 
-        if not event or event.available_tickets<=0:
-            # if DB says sold out, restore Redis
-            redis_client.incr(stock_key)
-            raise HTTPException(status_code=404,detail="Sold out (DB check)")
+        if not event or event.available_tickets < request.quantity:
+            # if DB says sold out or insufficient, restore Redis
+            redis_client.incrby(stock_key, request.quantity)
+            raise HTTPException(status_code=400,detail="Sold Out (DB check)")
         
         event.available_tickets -= request.quantity
         db.commit()
