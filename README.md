@@ -1,79 +1,56 @@
-# FlashTix - High Concurrency Ticket Booking System
+# FlashTix - Flash Sale Inventory System
 
-FlashTix is a backend-focused distributed system designed to handle high-concurrency ticket booking scenarios without overselling. It leverages a microservices architecture with a strong focus on distributed consistency and database integrity.
+FlashTix is a high-performance, microservices-based inventory and order management system designed specifically for the unique challenges of flash sales (high concurrency, low latency, and transactional integrity).
 
-## System Design Overview
-FlashTix is designed to handle high-concurrency ticket booking scenarios by centralizing inventory ownership, using synchronous reservation for strong consistency, and asynchronus event-driven workflows for payment and notifications.
+## 🚀 Key Features
 
-### Core Architecture
+- **High-Concurrency Seat Reservation**: Utilizes Redis with Lua scripting and row-level Postgres locking to prevent overselling.
+- **Idempotent Payment Processing**: Prevents double payments using custom idempotency keys tracked in Postgres.
+- **Distributed Consistency**: Implements a compensation-based workflow (Saga pattern) to release inventory if downstream payment fails.
+- **Service Health Aware**: Optimized Docker orchestration with intelligent health-checks ensuring zero-downtime dependency management.
 
-```mermaid
-graph LR
-    Client -->|POST /orders| OS[Order Service]
-    OS -->|POST /reserve| IS[Inventory Service]
-    IS -->|UPDATE| DB[(PostgreSQL)]
-    OS -->|CREATE| DB
-    OS -.->|Compensation /release| IS
-```
+## 🏗️ Architecture
 
-## 🏗️ Technical Architecture
+The system consists of the following services:
 
-### Services
-- **Inventory Service (Port 8001)**: 
-  - Owns the source of truth for ticket stock.
-  - Implements **SELECT FOR UPDATE** (Row-level locking) to prevent overselling.
-- **Order Service (Port 8002)**: 
-  - Manages the order lifecycle.
-  - Coordinates between clients and the inventory service.
+1.  **Inventory Service**: Manages event seat availability. Uses Redis for fast decrement and Postgres as the source of truth.
+2.  **Order Service**: Orchestrates the order lifecycle (Reserve -> Create -> Pay). Handles failures and triggers compensation logic.
+3.  **Payment Service**: Simulates payment processing with built-in idempotency logic to handle network retries safely.
+4.  **Notification Service**: (Stub) Planned for user alerts on order confirmation.
 
-### Distributed Consistency Strategy
-FlashTix uses a **Compensation-based (Saga-lite)** pattern to ensure eventual consistency:
-1. **Synchronous Reserve**: Inventory is reserved and locked in the database.
-2. **Order Creation**: If inventory reservation succeeds, an order record is created.
-3. **Compensation**: If order creation fails (e.g., database error), the Order Service automatically sends a `release` request to the Inventory Service to restore the stock.
+## 🛠️ Tech Stack
 
-## 🛠️ Getting Started
+- **Backend**: Python 3.11, FastAPI
+- **Database**: PostgreSQL 15 (SQLAlchemy ORM)
+- **Caching**: Redis 7
+- **DevOps**: Docker, Docker Compose
 
-### Prerequisites
-- Docker & Docker Compose
+## ⚡ Recent Modifications & Improvements
 
-### Fast Startup
-Run the entire system in detached mode:
-```bash
-docker-compose up -d --build
-```
+- **Reliable Startup**: Integrated Docker health-checks (`pg_isready`) and service dependencies to ensure services only boot once Postgres is fully initialized.
+- **Strict Idempotency**: Added `idempotency_key` support across Order and Payment services. Retrying a failed or pending payment now safely returns the existing state instead of creating duplicates.
+- **Transactional Compensation**: Improved the `order-service` to reliably release tickets back to the pool if a payment fails during the transaction.
+- **Code Quality**: Fixed several critical bugs in status transition logic and dependency management.
 
-### Checking Health
-- **Inventory Service**: `curl http://localhost:8001/health`
-- **Order Service**: `curl http://localhost:8002/health`
+## 🚦 Getting Started
 
-## 🧪 Testing with Postman
+1.  **Start all services**:
+    ```bash
+    docker-compose up --build
+    ```
+2.  **Access points**:
+    - Inventory Service: `http://localhost:8001`
+    - Order Service: `http://localhost:8002`
+    - Payment Service: `http://localhost:8003`
 
-### 1. Create an Order
-- **Method**: `POST`
-- **URL**: `http://localhost:8002/orders`
-- **Body (JSON)**:
-  ```json
-  {
-      "event_id": 1,
-      "quantity": 2
-  }
-  ```
+3.  **Database Access**:
+    ```bash
+    docker exec -it flash-tix-postgres-1 psql -U flashuser -d flashtix
+    ```
 
-### 2. Manual Inventory Reserve (Optional)
-- **Method**: `POST`
-- **URL**: `http://localhost:8001/inventory/reserve`
-- **Body (JSON)**:
-  ```json
-  {
-      "event_id": 1,
-      "quantity": 1
-  }
-  ```
+## 🧪 Testing the Flow
 
-## 📊 Database Management
-
-Reset tickets for testing (Event ID 1):
-```bash
-docker exec flash-tix-postgres-1 psql -U flashuser -d flashtix -c "UPDATE events SET available_tickets = 100, total_tickets = 100 WHERE id = 1;"
+To simulate a seat purchase:
+```powershell
+Invoke-RestMethod -Uri http://localhost:8002/orders -Method Post -ContentType "application/json" -Body '{"event_id": 1, "quantity": 1}'
 ```
