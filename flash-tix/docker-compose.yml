@@ -41,11 +41,14 @@ services:
       - postgres
     environment:
       DATABASE_URL: postgresql://flashuser:flashpass@postgres:5432/flashtix
-  # payment-service:
-  #   build: ./payment-service
-  #   ports:
-  #     - "8003:8000"
-
+  payment-service:
+    build: ./payment-service
+    ports:
+      - "8003:8000"
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://flashuser:flashpass@postgres:5432/flashtix
   # notification-service:
   #   build: ./notification-service
   #   ports:
