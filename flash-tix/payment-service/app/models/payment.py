@@ -9,6 +9,9 @@ class Payment(Base):
     order_id=Column(Integer,nullable=False)
 
     amount=Column(Integer,nullable=False)
+
+    idempotency_key=Column(String,unique=True,nullable=False)
+
     status=Column(String,nullable=False)
 
     created_at=Column(DateTime(timezone=True),server_default=func.now())
