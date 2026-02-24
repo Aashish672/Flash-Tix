@@ -26,8 +26,8 @@ def create_order(request: CreateOrderRequest):
     db = SessionLocal()
 
     try:
-        # Call Inventory Service
-        response = requests.post(
+        # Step 1: Reserve Inventory
+        inventory_response = requests.post(
             "http://inventory-service:8000/inventory/reserve",
             json={
                 "event_id": request.event_id,
@@ -35,36 +35,53 @@ def create_order(request: CreateOrderRequest):
             }
         )
 
-        if response.status_code != 200:
+        if inventory_response.status_code != 200:
             raise HTTPException(status_code=400, detail="Inventory reservation failed")
         
         
-        try:
-            # create order
-            order=Order(
-                event_id=request.event_id,
-                quantity=request.quantity,
-                status="CREATED"
-            )
+        # Step 2: Create Order in CREATED state
+        order=Order(
+            event_id=request.event_id,
+            quantity=request.quantity,
+            status="CREATED"
+        )
 
-            db.add(order)
+        db.add(order)
+        db.commit()
+        db.refresh(order)
+
+        # Step 3: Call Payment Service
+        payment_response=requests.post(
+            "http://payment-service:8000/payments",
+            json={
+                "order_id":order.id,
+                "amount":100,
+                "idempotency_key":f"order-{order.id}"
+            }
+        )
+
+        if payment_response.status_code==200:
+            order.status="CONFIRMED"
             db.commit()
-            db.refresh(order)
-
             return{
                 "order_id":order.id,
                 "status":order.status
             }
-        except Exception as e:
-            # Compensation
+        else:
+            #Payment Failed: Compensate
+            order.status="FAILED"
+            db.commit()
+
+            # Release Inventory
             requests.post(
                 "http://inventory-service:8000/inventory/release",
                 json={
-                    "event_id": request.event_id,
-                    "quantity": request.quantity
+                    "event_id":request.event_id,
+                    "quantity":request.quantity
                 }
             )
-            raise
-        
+
+            raise HTTPException(status_code=400,detail="Payment Failed")
+    
     finally:
         db.close()
