@@ -68,8 +68,9 @@ def create_order(request: CreateOrderRequest):
                 "status":order.status
             }
         else:
-            #Payment Failed: Compensate
-            order.status="FAILED"
+            # Payment Failed: Compensate
+            order.status = "FAILED"
+            db.merge(order)
             db.commit()
 
             # Release Inventory
