@@ -4,6 +4,9 @@ from app.models.payment import Payment
 from pydantic import BaseModel
 import random
 
+import threading
+from app.consumer import start_consumer
+
 app=FastAPI()
 
 class PaymentRequest(BaseModel):
@@ -14,6 +17,10 @@ class PaymentRequest(BaseModel):
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+
+    thread=threading.Thread(target=start_consumer)
+    thread.daemon=True
+    thread.start()
 
 @app.get("/health")
 def health_check():

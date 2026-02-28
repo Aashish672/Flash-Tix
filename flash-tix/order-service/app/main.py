@@ -8,6 +8,8 @@ import requests
 from pydantic import BaseModel
 
 from app.rabbitmq import publish_order_created
+import threading
+from app.consumer import start_consumer
 
 class CreateOrderRequest(BaseModel):
     event_id:int
@@ -18,6 +20,10 @@ app=FastAPI()
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+
+    thread=threading.Thread(target=start_consumer)
+    thread.daemon=True
+    thread.start()
 
 @app.get("/health")
 def health_check():
