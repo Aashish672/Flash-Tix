@@ -7,6 +7,8 @@ import requests
 
 from pydantic import BaseModel
 
+from app.rabbitmq import publish_order_created
+
 class CreateOrderRequest(BaseModel):
     event_id:int
     quantity:int=1
@@ -50,39 +52,55 @@ def create_order(request: CreateOrderRequest):
         db.commit()
         db.refresh(order)
 
-        # Step 3: Call Payment Service
-        payment_response=requests.post(
-            "http://payment-service:8000/payments",
-            json={
-                "order_id":order.id,
-                "amount":100,
-                "idempotency_key":f"order-{order.id}"
-            }
+        #Step 3: Publish event to RabbitMQ
+        publish_order_created(
+            order.id,
+            request.event_id,
+            request.quantity
         )
 
-        if payment_response.status_code==200:
-            order.status="CONFIRMED"
-            db.commit()
-            return{
-                "order_id":order.id,
-                "status":order.status
-            }
-        else:
-            # Payment Failed: Compensate
-            order.status = "FAILED"
-            db.merge(order)
-            db.commit()
+        return{
+            "order_id":order.id,
+            "status":order.status,
+            "message":"Order Created and Payment Processing Started"
+        }
 
-            # Release Inventory
-            requests.post(
-                "http://inventory-service:8000/inventory/release",
-                json={
-                    "event_id":request.event_id,
-                    "quantity":request.quantity
-                }
-            )
+    
+    #     # Step 3: Call Payment Service
+    #     payment_response=requests.post(
+    #         "http://payment-service:8000/payments",
+    #         json={
+    #             "order_id":order.id,
+    #             "amount":100,
+    #             "idempotency_key":f"order-{order.id}"
+    #         }
+    #     )
 
-            raise HTTPException(status_code=400,detail="Payment Failed")
+    #     if payment_response.status_code==200:
+    #         order.status="CONFIRMED"
+    #         db.commit()
+    #         return{
+    #             "order_id":order.id,
+    #             "status":order.status
+    #         }
+    #     else:
+    #         # Payment Failed: Compensate
+    #         order.status = "FAILED"
+    #         db.merge(order)
+    #         db.commit()
+
+    #         # Release Inventory
+    #         requests.post(
+    #             "http://inventory-service:8000/inventory/release",
+    #             json={
+    #                 "event_id":request.event_id,
+    #                 "quantity":request.quantity
+    #             }
+    #         )
+
+    #         raise HTTPException(status_code=400,detail="Payment Failed")
     
     finally:
         db.close()
+
+
