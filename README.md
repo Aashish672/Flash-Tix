@@ -1,88 +1,69 @@
-# FlashTix - Flash Sale Inventory System
+# FlashTix - Event Management Platform 🎫
 
-FlashTix is a high-performance, microservices-based inventory and order management system designed for the extreme concurrency of flash sales. It utilizes an **Asynchronous Choreography-based Saga** pattern to ensure eventual consistency and system resilience.
+FlashTix is a modern, microservices-based ticketing platform (similar to BookMyShow) designed for high-concurrency event bookings. It showcases advanced backend patterns like **Distributed Transactions (Saga Pattern)** and **Event-Driven Architecture**.
 
-## 🏗️ Architecture & Flow
+---
 
-The system uses **RabbitMQ** to decouple order creation from payment processing, allowing it to handle massive traffic bursts safely.
+## 🌟 Key Features
 
-### Event-Driven Workflow (Saga Pattern)
+- **Dynamic Event Management**: Admin users can create new events with specific ticket capacities directly from the dashboard.
+- **Distributed Saga Transactions**: Uses an **Asynchronous Choreography-based Saga** via RabbitMQ to ensure consistency across Orders, Payments, and Inventory.
+- **High-Concurrency Booking**: Implements atomic stock management using **Redis Lua Scripts** and Postgres row-level locking to prevent double-booking.
+- **Auto-Recovery**: Abandoned ticket holds are automatically released after 5 minutes by a background worker, ensuring maximal inventory availability.
+- **Real-Time Notifications**: A dedicated notification service listens for booking completions to simulate sending confirmations to users.
+- **Premium User Experience**: Built with **Next.js 14**, **Tailwind CSS**, and **Framer Motion** for a smooth, high-end feel.
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant O as Order Service
-    participant I as Inventory Service
-    participant R as RabbitMQ
-    participant P as Payment Service
-    participant DB as Postgres
+---
 
-    U->>O: POST /orders
-    O->>I: Reserve Inventory (HTTP)
-    O->>DB: Create Order (Status: CREATED)
-    O->>R: Publish "order_created"
-    O-->>U: 202 Accepted (Order Created)
+## 🏗️ Architecture
 
-    R->>P: Consume "order_created"
-    P->>DB: Process Payment (Atomic)
-    P->>R: Publish "payment_result" (success/failed)
+The system is built as a suite of decoupled microservices:
 
-    R->>O: Consume "payment_result"
-    alt Payment Success
-        O->>DB: Update Status to CONFIRMED
-    else Payment Failed
-        O->>DB: Update Status to CANCELLED
-        O->>I: Release Inventory (HTTP Compensation)
-    end
-```
+1. **Inventory Service**: Owns events and ticket stock. Handles reservations and auto-recovery.
+2. **Order Service**: Manages the booking lifecycle and orchestrates the Saga flow.
+3. **Payment Service**: Processes transactions and emits success/failure events.
+4. **Notification Service**: Sends confirmation once the booking is fully confirmed.
 
-## 🚀 Key Features
+### The Booking Flow
+`Frontend` -> `Order Service` -> `Inventory Reservation (Sync)` -> `Order Created Event` -> `Payment Service` -> `Payment Result Event` -> `Order Service (Confirm)` -> `Notification Service (Alert)`.
 
-- **Asynchronous Scalability**: Order creation is non-blocking; the system "accepts" orders and processes payments in the background.
-- **Microservice Resiliency**: 
-    - **Persistent Retries**: Publishers and Consumers retry RabbitMQ connections up to 20 times to handle restarts.
-    - **NO-ACK Persistence**: If the database is down, consumers will NOT acknowledge the message, ensuring it stays safely in the queue.
-- **Strict Idempotency**: 
-    - Prevents double-charging if messages are redelivered.
-    - Prevents duplicate status updates if results are processed twice.
-- **High-Concurrency Inventory**: Redis-backed reservations prevent overselling.
+---
 
 ## 🛠️ Tech Stack
 
-- **Backend**: Python 3.11, FastAPI
-- **Messaging**: RabbitMQ 3 (Management Plugin enabled)
-- **Database**: PostgreSQL 15 (SQLAlchemy ORM)
-- **Caching**: Redis 7
-- **Orchestration**: Docker & Docker Compose
+- **Backend**: Python 3.11 (FastAPI)
+- **Frontend**: Next.js 14 (App Router), Tailwind CSS, Framer Motion
+- **Messaging**: RabbitMQ (Message Broker)
+- **Data Storage**: PostgreSQL (Relational), Redis (Fast Atomic Caching)
+- **Containerization**: Docker & Docker Compose
+
+---
 
 ## 🚦 Getting Started
 
-1.  **Start all services**:
-    ```bash
-    docker-compose up --build
-    ```
-2.  **Access points**:
-    - Order Service: `http://localhost:8002`
-    - RabbitMQ UI: `http://localhost:15672` (guest/guest)
-    - Inventory Service: `http://localhost:8001`
-    - Payment Service: `http://localhost:8003`
+### Launch the Platform
+```bash
+# Enter the project directory
+cd flash-tix
 
-3.  **Monitor Logs**:
-    ```bash
-    docker-compose logs -f order-service payment-service
-    ```
-
-## 🧪 Testing & Chaos Validation
-
-### standard Flow
-```powershell
-Invoke-RestMethod -Uri http://localhost:8002/orders -Method Post -ContentType "application/json" -Body '{"event_id": 1, "quantity": 1}'
+# Start all microservices and the frontend
+docker-compose up --build
 ```
 
-### Chaos Scenarios
-The system is built to survive:
-1.  **RabbitMQ Outage**: Services retry connection until restored; no messages lost.
-2.  **Service Crash**: Messages remain in the queue until successfully processed and acknowledged.
-3.  **Database Downtime**: Idempotency and NO-ACK logic ensure data integrity once the DB is back online.
+### Access Points
+- **Next.js Dashboard**: [http://localhost:3001](http://localhost:3001)
+- **Message Broker (RabbitMQ)**: [http://localhost:15672](http://localhost:15672) (Guest/Guest)
 
-*For detailed failure testing steps, see `chaos_testing_guide.md`.*
+---
+
+## 💡 Interview Taking Points
+
+When explaining this project in an interview, focus on:
+1. **The Distributed Transaction Problem**: How you solved the "Booking vs. Payment" consistency problem using the Saga pattern.
+2. **Concurrency Control**: How you used Redis Lua scripts to ensure ticket counts remain accurate under heavy load.
+3. **Microservices Communication**: Why you chose asynchronous messaging (RabbitMQ) over synchronous HTTP for the payment flow.
+4. **Resiliency**: How the system handles service failures without losing data.
+
+---
+
+*Designed for high-scale engineering and senior-level software roles.*

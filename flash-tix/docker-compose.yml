@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:15
@@ -11,6 +9,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U flashuser -d flashtix" ]
       interval: 5s
@@ -32,7 +31,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://flashuser:flashpass@postgres:5432/flashtix
+      DATABASE_URL: postgresql+psycopg2://flashuser:flashpass@postgres:5432/inventory_db
   order-service:
     build: ./order-service
     ports:
@@ -41,7 +40,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://flashuser:flashpass@postgres:5432/flashtix
+      DATABASE_URL: postgresql+psycopg2://flashuser:flashpass@postgres:5432/order_db
   payment-service:
     build: ./payment-service
     ports:
@@ -52,17 +51,56 @@ services:
       rabbitmq:
         condition: service_started
     environment:
-      DATABASE_URL: postgresql://flashuser:flashpass@postgres:5432/flashtix
-  # notification-service:
-  #   build: ./notification-service
-  #   ports:
-  #     - "8004:8000"
+      DATABASE_URL: postgresql+psycopg2://flashuser:flashpass@postgres:5432/payment_db
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8002
+      - VITE_AUTH_URL=http://localhost:8005
+      - VITE_INVENTORY_URL=http://localhost:8001
+
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8005:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://flashuser:flashpass@postgres:5432/auth_db
+      JWT_SECRET: supersecretkey
+      ALGORITHM: HS256
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "8004:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - SMTP_HOST=${SMTP_HOST:-smtp.mailtrap.io}
+      - SMTP_PORT=${SMTP_PORT:-2525}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM:-tickets@flashtix.com}
 
   rabbitmq:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
       - "15672:15672"
+    environment:
+      RABBITMQ_MEM_RELATIVE: "0.4" # Use 40% of host memory max for RabbitMQ
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "check_running" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:
   redisdata:

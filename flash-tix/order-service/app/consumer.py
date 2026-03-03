@@ -4,6 +4,7 @@ import requests
 import time
 from app.database import SessionLocal
 from app.models.order import Order
+from app.rabbitmq import publish_order_cancelled
 
 def callback(ch, method, properties, body):
     try:
@@ -36,26 +37,8 @@ def callback(ch, method, properties, body):
             order.status = "CONFIRMED"
         else:
             order.status = "CANCELLED"
-
-            # Compensate inventory
-            try:
-                inventory_res = requests.post(
-                    "http://inventory-service:8000/inventory/release",
-                    json={
-                        "event_id": order.event_id,
-                        "quantity": order.quantity
-                    },
-                    timeout=5
-                )
-                if inventory_res.status_code != 200:
-                    print(f"Inventory Service returned {inventory_res.status_code} for order {order_id}")
-                    # Re-queue message if inventory release failed? 
-                    # For chaos testing, let's keep it simple: if it's a 4xx, we might skip, but if inventory service is DOWN, we should NOT ack.
-            except requests.exceptions.RequestException as e:
-                print(f"Inventory Service unreachable for order {order_id}: {e}. NO-ACKing message.")
-                db.rollback()
-                db.close()
-                return # No ACK, RabbitMQ will redeliver
+            # Compensate inventory via EVENT
+            publish_order_cancelled(order.id, order.event_id, order.quantity)
 
         db.commit()
         print(f"Order {order_id} updated to {order.status}")

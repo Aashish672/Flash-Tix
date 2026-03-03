@@ -1,13 +1,21 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base, SessionLocal
 from app.models.payment import Payment
 from pydantic import BaseModel
-import random
 
 import threading
 from app.consumer import start_consumer
 
 app=FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class PaymentRequest(BaseModel):
     order_id: int
@@ -43,8 +51,7 @@ def process_payment(request:PaymentRequest):
                 "status": existing.status,
                 "message": "Idempotent replay"
             }
-        #Simulate Random Failure
-        success=random.choice([True,True,True,False]) # 75% Success
+        success = True
 
         payment=Payment(
             order_id=request.order_id,
