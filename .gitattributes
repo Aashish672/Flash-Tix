@@ -1,0 +1,5 @@
+# Tell GitHub to ignore the frontend folder for language stats
+frontend/* linguist-vendored
+# Ignore all TypeScript files for language stats
+*.ts linguist-vendored
+*.tsx linguist-vendored
