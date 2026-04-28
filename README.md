@@ -5,12 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-19.2.4-blue.svg)](https://reactjs.org/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
-
-## Demo / Screenshot
-
-![FlashTix Demo](path/to/demo-image.png)  
-*Add your demo GIF or screenshot here showing the booking flow and real-time updates.*
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)  
 
 ## Key Features
 
@@ -128,3 +123,6 @@ The most challenging aspect was implementing distributed transactions without tr
 - Introduce event sourcing for better audit trails and replay capabilities
 - Develop a mobile app companion using React Native
 - Integrate with external payment gateways for production readiness
+
+## Project Link
+http://13.205.67.44/
