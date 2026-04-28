@@ -1,60 +1,130 @@
-# FlashTix - Event Management Platform 🎫
+# FlashTix 🎫
 
-FlashTix is a modern, microservices-based ticketing platform (similar to BookMyShow) designed for high-concurrency event bookings. It showcases advanced backend patterns like **Distributed Transactions (Saga Pattern)** and **Event-Driven Architecture**.
+**A high-concurrency event ticketing platform that solves double-booking issues through distributed transactions and real-time inventory management.**
 
----
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
+[![React](https://img.shields.io/badge/React-19.2.4-blue.svg)](https://reactjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
-## 🌟 Key Features
+## Demo / Screenshot
 
-- **Dynamic Event Management**: Admin users can create new events with specific ticket capacities directly from the dashboard.
-- **Distributed Saga Transactions**: Uses an **Asynchronous Choreography-based Saga** via RabbitMQ to ensure consistency across Orders, Payments, and Inventory.
-- **High-Concurrency Booking**: Implements atomic stock management using **Redis Lua Scripts** and Postgres row-level locking to prevent double-booking.
-- **Auto-Recovery**: Abandoned ticket holds are automatically released after 5 minutes by a background worker, ensuring maximal inventory availability.
-- **Real-Time Notifications**: A dedicated notification service listens for booking completions to simulate sending confirmations to users.
-- **Premium User Experience**: Built with **Next.js 14**, **Tailwind CSS**, and **Framer Motion** for a smooth, high-end feel.
+![FlashTix Demo](path/to/demo-image.png)  
+*Add your demo GIF or screenshot here showing the booking flow and real-time updates.*
 
----
+## Key Features
 
-## 🏗️ Architecture
+- **JWT-based Authentication with Refresh Token Rotation**: Secure user sessions with automatic token renewal for uninterrupted access.
+- **Asynchronous Saga Pattern for Distributed Transactions**: Ensures atomicity across order, payment, and inventory services using RabbitMQ choreography.
+- **Redis Lua Scripts for Atomic Stock Management**: Prevents race conditions in high-concurrency scenarios with server-side scripting.
+- **Auto-Recovery Mechanism**: Background workers release abandoned holds after 5 minutes, maximizing ticket availability.
+- **Real-Time SSE Notifications**: Server-sent events provide instant booking confirmations and status updates.
 
-The system is built as a suite of decoupled microservices:
+## Tech Stack
 
-1. **Inventory Service**: Owns events and ticket stock. Handles reservations and auto-recovery.
-2. **Order Service**: Manages the booking lifecycle and orchestrates the Saga flow.
-3. **Payment Service**: Processes transactions and emits success/failure events.
-4. **Notification Service**: Sends confirmation once the booking is fully confirmed.
+### Backend
+- **Python 3.11** with **FastAPI** for high-performance REST APIs
+- **SQLAlchemy** for ORM and database interactions
+- **PostgreSQL** for relational data storage
 
-### The Booking Flow
-`Frontend` -> `Order Service` -> `Inventory Reservation (Sync)` -> `Order Created Event` -> `Payment Service` -> `Payment Result Event` -> `Order Service (Confirm)` -> `Notification Service (Alert)`.
+### Frontend
+- **React 19** with **Vite** for fast development and building
+- **TypeScript** for type safety
+- **Tailwind CSS** and **Framer Motion** for responsive, animated UI
 
----
+### Infrastructure
+- **RabbitMQ** for event-driven messaging
+- **Redis** for caching and atomic operations
+- **Docker & Docker Compose** for containerized deployment
 
-## 🛠️ Tech Stack
+## Architecture Overview
 
-- **Backend**: Python 3.11 (FastAPI)
-- **Frontend**: Next.js 14 (App Router), Tailwind CSS, Framer Motion
-- **Messaging**: RabbitMQ (Message Broker)
-- **Data Storage**: PostgreSQL (Relational), Redis (Fast Atomic Caching)
-- **Containerization**: Docker & Docker Compose
+FlashTix employs a microservices architecture to achieve scalability and fault isolation. Each service owns its domain data and communicates asynchronously via RabbitMQ.
 
----
-
-## 🚦 Getting Started
-
-### Launch the Platform
-```bash
-# Enter the project directory
-cd flash-tix
-
-# Start all microservices and the frontend
-docker-compose up --build
+```
+Frontend (React)
+    ↓
+Order Service (Saga Orchestrator)
+├── Inventory Service (Stock Management)
+├── Payment Service (Transaction Processing)
+└── Notification Service (Real-Time Alerts)
 ```
 
-### Access Points
-- **Next.js Dashboard**: [http://localhost:3001](http://localhost:3001)
-- **Message Broker (RabbitMQ)**: [http://localhost:15672](http://localhost:15672) (Guest/Guest)
+This design enables independent scaling of services and implements the Saga pattern for distributed transactions, ensuring consistency without two-phase commits. Redis handles high-frequency inventory checks, while PostgreSQL maintains transactional integrity.
 
----
-## Project URL
-http://13.205.67.44/
-*Designed for high-scale engineering and senior-level software roles.*
+## Getting Started
+
+### Prerequisites
+- Docker and Docker Compose installed
+- At least 4GB RAM available for containers
+
+### Environment Setup
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Aashish672/Flash-Tix.git
+   cd Flash-Tix
+   ```
+
+2. Navigate to the project directory:
+   ```bash
+   cd flash-tix
+   ```
+
+3. Initialize the database (if needed):
+   ```bash
+   ./init-db.sh
+   ```
+
+### Running Locally
+1. Start all services:
+   ```bash
+   docker-compose up --build
+   ```
+
+2. Access the application:
+   - Frontend: http://localhost:3001
+   - RabbitMQ Management: http://localhost:15672 (guest/guest)
+
+### Running Tests
+```bash
+# Run concurrency tests
+python test_concurrency.py
+```
+
+## API Documentation
+
+### Auth Service
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/register` | Register a new user |
+| POST | `/login` | Authenticate user and return JWT token |
+
+### Order Service
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/orders` | Create a new order (initiates saga) |
+| GET | `/orders/{id}` | Get order status |
+
+### Inventory Service
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/events` | Create new event |
+| POST | `/events/{id}/reserve` | Reserve tickets |
+| GET | `/events/{id}` | Get event details |
+
+### Payment Service
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/payments` | Process payment |
+
+## Challenges & Decisions
+
+The most challenging aspect was implementing distributed transactions without traditional ACID guarantees. We chose the asynchronous Saga pattern over synchronous orchestration to avoid single points of failure and enable better scalability. This decision required careful error handling and compensation logic, but resulted in a system that can handle thousands of concurrent bookings without blocking.
+
+## Future Improvements
+
+- Implement API rate limiting and circuit breakers for enhanced resilience
+- Add comprehensive monitoring with Prometheus and Grafana
+- Introduce event sourcing for better audit trails and replay capabilities
+- Develop a mobile app companion using React Native
+- Integrate with external payment gateways for production readiness
