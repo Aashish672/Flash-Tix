@@ -55,16 +55,6 @@ docker-compose up --build
 - **Message Broker (RabbitMQ)**: [http://localhost:15672](http://localhost:15672) (Guest/Guest)
 
 ---
-
-## 💡 Interview Taking Points
-
-When explaining this project in an interview, focus on:
-1. **The Distributed Transaction Problem**: How you solved the "Booking vs. Payment" consistency problem using the Saga pattern.
-2. **Concurrency Control**: How you used Redis Lua scripts to ensure ticket counts remain accurate under heavy load.
-3. **Microservices Communication**: Why you chose asynchronous messaging (RabbitMQ) over synchronous HTTP for the payment flow.
-4. **Resiliency**: How the system handles service failures without losing data.
-
----
 ## Project URL
 http://13.205.67.44/
 *Designed for high-scale engineering and senior-level software roles.*
